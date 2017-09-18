@@ -2,7 +2,6 @@
 package eventstoreutil
 
 import (
-	"encoding/json"
 	"flag"
 	ges "github.com/jdextraze/go-gesclient"
 	gesClient "github.com/jdextraze/go-gesclient/client"
@@ -90,7 +89,7 @@ func Sub(gesConf GESConfig, eventsSub chan<- []byte, closeChan <-chan os.Signal,
 }
 
 // Pub publishes events to a stream
-func Pub(gesConf GESConfig, eventType string, eventsPub <-chan interface{}, closeChan <-chan os.Signal) {
+func Pub(gesConf GESConfig, eventType string, eventsPub <-chan []byte, closeChan <-chan os.Signal) {
 	uri, err := url.Parse(gesConf.Addr)
 	if err != nil {
 		log.Fatalf("Pub: Error parsing address: %v", err)
@@ -108,11 +107,10 @@ func Pub(gesConf GESConfig, eventType string, eventsPub <-chan interface{}, clos
 	for {
 		select {
 		case event := <-eventsPub:
-			data, err := json.Marshal(event)
 			if err != nil {
 				log.Printf("Error occured while parsing event: %v", err)
 			} else {
-				evt := gesClient.NewEventData(uuid.NewV4(), eventType, true, data, nil)
+				evt := gesClient.NewEventData(uuid.NewV4(), eventType, true, event, nil)
 				result := &gesClient.WriteResult{}
 
 				task, err := conn.AppendToStreamAsync(gesConf.Stream, gesClient.ExpectedVersion_Any, []*gesClient.EventData{evt}, nil)

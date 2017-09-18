@@ -1,0 +1,5 @@
+* eventstoreutil
+  Utility functions for working with the EventStore client. Currently focusing on channel abstractions.
+** Examples
+   - [[https://github.com/paullucas/eventstoreutil/blob/master/src/examples/sub/main.go][sub.cljs]] - Subscribe example
+   - [[https://github.com/paullucas/eventstoreutil/blob/master/src/examples/pub/main.go][pub.cljs]] - Publish example
