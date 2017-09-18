@@ -3,3 +3,4 @@
 ** Examples
    - [[https://github.com/paullucas/eventstoreutil/blob/master/examples/sub/sub.go][sub.go]] - Subscribe example
    - [[https://github.com/paullucas/eventstoreutil/blob/master/examples/pub/pub.go][pub.go]] - Publish example
+   - [[https://github.com/paullucas/eventstoreutil/blob/master/examples/readAPI/readAPI.go][readAPI.go]] - Stateful query API example
