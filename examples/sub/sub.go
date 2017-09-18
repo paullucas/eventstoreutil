@@ -40,6 +40,6 @@ func main() {
 	es.ParseFlags(&gesConf)
 	log.Printf("Config: %v", gesConf)
 
-	go es.Sub(gesConf, eventsSub, closeChan, true)
+	go es.Sub(gesConf, eventsSub, closeChan)
 	subLoop()
 }

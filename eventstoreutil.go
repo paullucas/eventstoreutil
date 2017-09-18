@@ -15,10 +15,11 @@ import (
 
 // GESConfig is for details related to EventStore
 type GESConfig struct {
-	Addr   string
-	Stream string
-	User   string
-	Pass   string
+	Addr    string
+	Stream  string
+	User    string
+	Pass    string
+	Verbose bool
 }
 
 // ParseFlags is for initializing a GESConfig via CLI arguments
@@ -27,11 +28,21 @@ func ParseFlags(gesConf *GESConfig) {
 	flag.StringVar(&gesConf.Stream, "gesStream", "Default", "EventStore Stream ID")
 	flag.StringVar(&gesConf.User, "gesUser", "admin", "EventStore Username")
 	flag.StringVar(&gesConf.Pass, "gesPass", "changeit", "EventStore Password")
+	flag.BoolVar(&gesConf.Verbose, "v", false, "Verbose Logging")
 	flag.Parse()
 }
 
+func subscriptionDroppedHandler(s *gesClient.EventStoreSubscription, r gesClient.SubscriptionDropReason, err error) error {
+	log.Printf("subscription dropped: %s, %v", r, err)
+	return nil
+}
+
 // Sub subscribes to the all stream
-func Sub(gesConf GESConfig, eventsSub chan<- []byte, closeChan <-chan os.Signal, logging bool) {
+func Sub(
+	gesConf GESConfig,
+	eventsSub chan<- []byte,
+	closeChan <-chan os.Signal,
+) {
 	uri, err := url.Parse(gesConf.Addr)
 	if err != nil {
 		log.Fatalf("Sub: Error parsing address: %v", err)
@@ -57,7 +68,7 @@ func Sub(gesConf GESConfig, eventsSub chan<- []byte, closeChan <-chan os.Signal,
 			if !strings.HasPrefix(eventType, "$") {
 				select {
 				case eventsSub <- e.OriginalEvent().Data():
-					if logging {
+					if gesConf.Verbose {
 						log.Printf("Event appeared! Type: %v", eventType)
 					}
 				}
@@ -65,10 +76,7 @@ func Sub(gesConf GESConfig, eventsSub chan<- []byte, closeChan <-chan os.Signal,
 			}
 			return nil
 		},
-		func(s *gesClient.EventStoreSubscription, r gesClient.SubscriptionDropReason, err error) error {
-			log.Printf("subscription dropped: %s, %v", r, err)
-			return nil
-		},
+		subscriptionDroppedHandler,
 		user,
 	)
 	if err != nil {
@@ -80,16 +88,21 @@ func Sub(gesConf GESConfig, eventsSub chan<- []byte, closeChan <-chan os.Signal,
 
 		<-closeChan
 
-		sub.Close()
+		_ = sub.Close()
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	conn.Close()
+	_ = conn.Close()
 	time.Sleep(10 * time.Millisecond)
 }
 
 // Pub publishes events to a stream
-func Pub(gesConf GESConfig, eventType string, eventsPub <-chan []byte, closeChan <-chan os.Signal) {
+func Pub(
+	gesConf GESConfig,
+	eventType string,
+	eventsPub <-chan []byte,
+	closeChan <-chan os.Signal,
+) {
 	uri, err := url.Parse(gesConf.Addr)
 	if err != nil {
 		log.Fatalf("Pub: Error parsing address: %v", err)
@@ -124,7 +137,7 @@ func Pub(gesConf GESConfig, eventType string, eventsPub <-chan []byte, closeChan
 			}
 
 		case <-closeChan:
-			conn.Close()
+			_ = conn.Close()
 			time.Sleep(10 * time.Millisecond)
 			return
 		}
