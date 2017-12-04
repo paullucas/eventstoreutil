@@ -32,9 +32,49 @@ func ParseFlags(gesConf *GESConfig) {
 	flag.Parse()
 }
 
-func subscriptionDroppedHandler(s *gesClient.EventStoreSubscription, r gesClient.SubscriptionDropReason, err error) error {
+func subscriptionDroppedHandler(_ gesClient.EventStoreSubscription, r gesClient.SubscriptionDropReason, err error) error {
 	log.Printf("subscription dropped: %s, %v", r, err)
 	return nil
+}
+
+// CreateConn creates an EventStore connection
+func CreateConn(uri *url.URL, name string) (gesClient.Connection, error) {
+	conn, err := ges.Create(gesClient.DefaultConnectionSettings, uri, name)
+	if err != nil {
+		return nil, err
+	}
+
+	conn.Connected().Add(func(evt gesClient.Event) error {
+		log.Printf("Connected: %+v", evt)
+		return nil
+	})
+
+	conn.Disconnected().Add(func(evt gesClient.Event) error {
+		log.Printf("Disconnected: %+v", evt)
+		return nil
+	})
+
+	conn.Reconnecting().Add(func(evt gesClient.Event) error {
+		log.Printf("Reconnecting: %+v", evt)
+		return nil
+	})
+
+	conn.Closed().Add(func(evt gesClient.Event) error {
+		log.Fatalf("Connection closed: %+v", evt)
+		return nil
+	})
+
+	conn.ErrorOccurred().Add(func(evt gesClient.Event) error {
+		log.Printf("Error: %+v", evt)
+		return nil
+	})
+
+	conn.AuthenticationFailed().Add(func(evt gesClient.Event) error {
+		log.Printf("Auth failed: %+v", evt)
+		return nil
+	})
+
+	return conn, nil
 }
 
 // Sub subscribes to the all stream
@@ -48,22 +88,20 @@ func Sub(
 		log.Fatalf("Sub: Error parsing address: %v", err)
 	}
 
-	conn, err := ges.Create(gesClient.DefaultConnectionSettings, uri, "AllSubscriber")
+	conn, err := CreateConn(uri, "AllSubscriber")
 	if err != nil {
 		log.Fatalf("Sub: Error creating connection: %v", err)
 	}
 
-	if err := conn.ConnectAsync().Wait(); err != nil {
+	if err = conn.ConnectAsync().Wait(); err != nil {
 		log.Fatalf("Sub: Error connecting: %v", err)
 	}
 
 	user := gesClient.NewUserCredentials(gesConf.User, gesConf.Pass)
 
-	sub := &gesClient.EventStoreSubscription{}
-
 	task, err := conn.SubscribeToAllAsync(
 		true,
-		func(s *gesClient.EventStoreSubscription, e *gesClient.ResolvedEvent) error {
+		func(s gesClient.EventStoreSubscription, e *gesClient.ResolvedEvent) error {
 			eventType := e.OriginalEvent().EventType()
 			if !strings.HasPrefix(eventType, "$") {
 				select {
@@ -81,9 +119,10 @@ func Sub(
 	)
 	if err != nil {
 		log.Fatalf("Error occured while subscribing to stream: %v", err)
-	} else if err := task.Result(sub); err != nil {
+	} else if err := task.Error(); err != nil {
 		log.Fatalf("Error occured while waiting for result of subscribing to stream: %v", err)
 	} else {
+		sub := task.Result().(gesClient.EventStoreSubscription)
 		log.Printf("SubscribeToAll result: %v", sub)
 
 		<-closeChan
@@ -108,12 +147,12 @@ func Pub(
 		log.Fatalf("Pub: Error parsing address: %v", err)
 	}
 
-	conn, err := ges.Create(gesClient.DefaultConnectionSettings, uri, "Publisher")
+	conn, err := CreateConn(uri, "Publisher")
 	if err != nil {
 		log.Fatalf("Pub: Error creating connection: %v", err)
 	}
 
-	if err := conn.ConnectAsync().Wait(); err != nil {
+	if err = conn.ConnectAsync().Wait(); err != nil {
 		log.Fatalf("Pub: Error connecting: %v", err)
 	}
 
@@ -124,14 +163,14 @@ func Pub(
 				log.Printf("Error occured while parsing event: %v", err)
 			} else {
 				evt := gesClient.NewEventData(uuid.NewV4(), eventType, true, event, nil)
-				result := &gesClient.WriteResult{}
 
 				task, err := conn.AppendToStreamAsync(gesConf.Stream, gesClient.ExpectedVersion_Any, []*gesClient.EventData{evt}, nil)
 				if err != nil {
 					log.Printf("Error occured while appending to stream: %v", err)
-				} else if err := task.Result(result); err != nil {
+				} else if err := task.Error(); err != nil {
 					log.Printf("Error occured while waiting for result of appending to stream: %v", err)
 				} else {
+					result := task.Result().(gesClient.WriteResult)
 					log.Printf("AppendToStream result: %v", result)
 				}
 			}
