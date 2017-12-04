@@ -170,7 +170,7 @@ func Pub(
 				} else if err := task.Error(); err != nil {
 					log.Printf("Error occured while waiting for result of appending to stream: %v", err)
 				} else {
-					result := task.Result().(gesClient.WriteResult)
+					result := task.Result().(*gesClient.WriteResult)
 					log.Printf("AppendToStream result: %v", result)
 				}
 			}
